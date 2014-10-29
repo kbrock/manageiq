@@ -1,0 +1,3 @@
+class ProviderForeman < Provider
+
+end
