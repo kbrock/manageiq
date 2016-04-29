@@ -19,8 +19,7 @@ module ManageIQ::Providers
 
     # required by aggregate_hardware
     def all_computer_system_ids
-      MiqPreloader.preload(container_nodes, :computer_system)
-      container_nodes.collect { |n| n.computer_system.id }
+      MiqPreloader.preload_and_map(container_nodes, :computer_system).pluck(:id)
     end
 
     def aggregate_cpu_total_cores(targets = nil)
