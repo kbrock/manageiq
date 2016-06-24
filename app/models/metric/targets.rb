@@ -9,16 +9,7 @@ module Metric::Targets
   end
 
   def self.capture_infra_targets(zone, options)
-    # Preload all of the objects we are going to be inspecting.
-    includes = {:ext_management_systems => {:hosts => {:ems_cluster => :tags, :tags => {}}}}
-    MiqPreloader.preload(zone, includes)
-
-    emses = zone.ext_management_systems
-
-    # If it can and does have a cluster, then ask that, otherwise, ask host itself.
-    hosts = emses.flat_map(&:host).select do |t|
-      t.ems_cluster ? t.ems_cluster.perf_capture_enabled? : t.perf_capture_enabled?
-    end
+    hosts = capture_host_targets(zone)
     storages = capture_storage_targets(hosts, options)
     vms = capture_vm_targets(hosts, options)
 
@@ -61,6 +52,19 @@ module Metric::Targets
     return Vm.none if options[:exclude_vms]
     MiqPreloader.preload(hosts, :vms => :ext_management_system)
     hosts.flat_map { |t| t.vms.select { |v| v.state == 'on' } }
+  end
+
+  def self.capture_host_targets(zone)
+    # Preload all of the objects we are going to be inspecting.
+    includes = {:ext_management_systems => {:hosts => {:ems_cluster => :tags, :tags => {}}}}
+    MiqPreloader.preload(zone, includes)
+
+    emses = zone.ext_management_systems
+
+    # If it can and does have a cluster, then ask that, otherwise, ask host itself.
+    emses.flat_map(&:hosts).select do |t|
+      t.ems_cluster ? t.ems_cluster.perf_capture_enabled? : t.perf_capture_enabled?
+    end
   end
 
   # @param [Host] hosts hosts that are a) enabled and b) have an ems
