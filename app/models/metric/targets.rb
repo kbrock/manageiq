@@ -13,14 +13,16 @@ module Metric::Targets
     includes = {:ext_management_systems => {:hosts => {:ems_cluster => :tags, :tags => {}}}}
     MiqPreloader.preload(zone, includes)
 
-    # If it can and does have a cluster, then ask that, otherwise, ask host itself.
-    targets = hosts = zone.hosts.select do |t|
-      t.respond_to?(:ems_cluster) && t.ems_cluster ? t.ems_cluster.perf_capture_enabled? : t.perf_capture_enabled?
-    end
-    targets += capture_storage_targets(hosts, options)
-    targets += capture_vm_targets(targets, Host, options)
+    emses = zone.ext_management_systems
 
-    targets
+    # If it can and does have a cluster, then ask that, otherwise, ask host itself.
+    hosts = emses.flat_map(&:host).select do |t|
+      t.ems_cluster ? t.ems_cluster.perf_capture_enabled? : t.perf_capture_enabled?
+    end
+    storages = capture_storage_targets(hosts, options)
+    vms = capture_vm_targets(hosts, options)
+
+    hosts + storages + vms
   end
 
   # @return vms under all availability zones
@@ -54,16 +56,11 @@ module Metric::Targets
     targets
   end
 
-  def self.capture_vm_targets(targets, parent_class, options)
+  # @param [Host] hosts hosts that are a) enabled and b) have an ems
+  def self.capture_vm_targets(hosts, options)
     return Vm.none if options[:exclude_vms]
-    enabled_parents = targets.select do |t|
-      t.kind_of?(parent_class) &&
-        t.kind_of?(Metric::CiMixin) &&
-        t.perf_capture_enabled? &&
-        t.respond_to?(:vms)
-    end
-    MiqPreloader.preload(enabled_parents, :vms => :ext_management_system)
-    enabled_parents.flat_map { |t| t.vms.select { |v| v.ext_management_system && v.state == 'on' } }
+    MiqPreloader.preload(hosts, :vms => :ext_management_system)
+    hosts.flat_map { |t| t.vms.select { |v| v.state == 'on' } }
   end
 
   # @param [Host] hosts hosts that are a) enabled and b) have an ems
