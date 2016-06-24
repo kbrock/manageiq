@@ -11,17 +11,13 @@ module Metric::Targets
   def self.capture_infra_targets(zone, options)
     # Preload all of the objects we are going to be inspecting.
     includes = {:ext_management_systems => {:hosts => {:ems_cluster => :tags, :tags => {}}}}
-    includes[:ext_management_systems][:hosts][:storages] = :tags unless options[:exclude_storages]
     MiqPreloader.preload(zone, includes)
 
-    targets = zone.hosts
-    targets += zone.storages.select { |s| Storage.supports?(s.store_type) } unless options[:exclude_storages]
-
     # If it can and does have a cluster, then ask that, otherwise, ask host itself.
-    targets = targets.select do |t|
+    targets = hosts = zone.hosts.select do |t|
       t.respond_to?(:ems_cluster) && t.ems_cluster ? t.ems_cluster.perf_capture_enabled? : t.perf_capture_enabled?
     end
-
+    targets += capture_storage_targets(hosts, options)
     targets += capture_vm_targets(targets, Host, options)
 
     targets
@@ -68,6 +64,14 @@ module Metric::Targets
     end
     MiqPreloader.preload(enabled_parents, :vms => :ext_management_system)
     enabled_parents.flat_map { |t| t.vms.select { |v| v.ext_management_system && v.state == 'on' } }
+  end
+
+  # @param [Host] hosts hosts that are a) enabled and b) have an ems
+  # hosts preloaded storages and tags
+  def self.capture_storage_targets(hosts, options)
+    return Storage.none if options[:exclude_storages]
+    MiqPreloader.preload(hosts, :storages => :tags)
+    hosts.flat_map { |h| h.storages.select { |s| Storage.supports?(s.store_type) && s.perf_capture_enabled? } }
   end
 
   # If a Cluster, standalone Host, or Storage is not enabled, skip it.
