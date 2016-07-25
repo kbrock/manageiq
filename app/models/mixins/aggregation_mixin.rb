@@ -57,8 +57,12 @@ module AggregationMixin
 
   def aggregate_hardware(from, field, targets = nil)
     from      = from.to_s.singularize
-    targets ||= send("all_#{from}_ids")
-    targets   = targets.collect(&:id) unless targets.first.kind_of?(Integer)
+    targets ||= send("all_#{from}s")
+    if targets.kind_of?(Array)
+      targets = targets.collect(&:id) unless targets.first.kind_of?(Integer)
+    else # keep as an inner query
+      targets = targets.select(:id)
+    end
     hdws      = Hardware.where("#{from}_id" => targets).select(Hardware.arel_attribute(field.to_sym).as(field.to_s))
 
     hdws.inject(0) { |t, hdw| t + hdw.send(field).to_i }
