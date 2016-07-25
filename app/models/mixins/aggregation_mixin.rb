@@ -55,14 +55,19 @@ module AggregationMixin
     hosts.collect(&:storages).flatten.compact.uniq
   end
 
+  # target is nil for all but 3 calls into here
+  #
+  # in the future, either
+  # - change target cases to pass in a condition instead of array / in clause
+  # - just call aggregate hardware directly on targets
+  #
   def aggregate_hardware(from, field, targets = nil)
-    from      = from.to_s.singularize
-    targets ||= send("all_#{from}s")
+    targets ||= send("all_#{from}")
     if targets.kind_of?(Array)
       targets = targets.collect(&:id) unless targets.first.kind_of?(Integer)
     else # keep as an inner query
       targets = targets.select(:id)
     end
-    Hardware.where("#{from}_id" => targets).sum(Hardware.arel_attribute(field.to_sym))
+    Hardware.where("#{from.to_s.singularize}_id" => targets).sum(Hardware.arel_attribute(field.to_sym))
   end
 end
