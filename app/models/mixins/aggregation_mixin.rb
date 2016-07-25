@@ -63,8 +63,6 @@ module AggregationMixin
     else # keep as an inner query
       targets = targets.select(:id)
     end
-    hdws      = Hardware.where("#{from}_id" => targets).select(Hardware.arel_attribute(field.to_sym).as(field.to_s))
-
-    hdws.inject(0) { |t, hdw| t + hdw.send(field).to_i }
+    Hardware.where("#{from}_id" => targets).sum(Hardware.arel_attribute(field.to_sym))
   end
 end
