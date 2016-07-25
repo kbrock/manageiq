@@ -1,7 +1,6 @@
 module AggregationMixin
   extend ActiveSupport::Concern
   included do
-    virtual_column :aggregate_cpu_speed,       :type => :integer, :uses => :hosts
     virtual_column :aggregate_cpu_total_cores, :type => :integer, :uses => :hosts
     virtual_column :aggregate_physical_cpus,   :type => :integer, :uses => :hosts
     virtual_column :aggregate_memory,          :type => :integer, :uses => :hosts
@@ -17,10 +16,18 @@ module AggregationMixin
     alias_method :all_vm_ids,             :vm_ids
     alias_method :all_miq_templates,      :miq_templates
     alias_method :all_miq_template_ids,   :miq_template_ids
-  end
 
-  def aggregate_cpu_speed(targets = nil)
-    aggregate_hardware(:hosts, :aggregate_cpu_speed, targets)
+    if reflections.keys.include?("hosts_hardwares")
+      virtual_column :aggregate_cpu_speed,       :type => :integer
+      def aggregate_cpu_speed(targets = nil)
+        hosts_hardwares.sum(:aggregate_cpu_speed)
+      end
+    else
+      virtual_column :aggregate_cpu_speed,       :type => :integer, :uses => :hosts
+      def aggregate_cpu_speed(targets = nil)
+        aggregate_hardware(:hosts, :aggregate_cpu_speed, targets)
+      end
+    end
   end
 
   def aggregate_cpu_total_cores(targets = nil)

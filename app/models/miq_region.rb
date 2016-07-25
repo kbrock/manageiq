@@ -333,6 +333,7 @@ class MiqRegion < ApplicationRecord
       vms     = e.all_vms_and_templates.count
       hosts   = e.all_hosts.count
       sockets = e.aggregate_physical_cpus
+      # sockets = e.hosts.joins(:hardware).sum(:cpu_sockets)
       $log.info("#{prefix}, EMS: [#{e.id}], Name: [#{e.name}], IP Address: [#{e.ipaddress}], Hostname: [#{e.hostname}], VMs: [#{vms}], Hosts: [#{hosts}], Sockets: [#{sockets}]")
 
       total_vms += vms
@@ -347,6 +348,7 @@ class MiqRegion < ApplicationRecord
     hosts      = hosts_objs.count
     vms        = VmOrTemplate.where(:ems_id => nil).count
     sockets    = my_region.aggregate_physical_cpus(hosts_objs)
+    # sockets    = host_objs.joins(:hardware).sum(:cpu_sockets)
     $log.info("#{prefix}, Not Under Management: VMs: [#{vms}], Hosts: [#{hosts}], Sockets: [#{sockets}]")
   end
 

@@ -127,9 +127,12 @@ module EmsCluster::CapacityPlanning
 
   def capacity_failover_host_resources_with_failover_hosts(profile, resource)
     case capacity_profile_method(profile, resource)
-    when :vcpu_average then                      aggregate_cpu_total_cores(failover_hosts)
-    when :memory_average, :memory_high_norm then aggregate_memory(failover_hosts).megabytes
-    when :vcpu_high_norm then                    aggregate_cpu_speed(failover_hosts)
+    when :vcpu_average then
+      hosts.join(:hardware).where(:failover => true).sum(:cpu_total_cores)
+    when :memory_average, :memory_high_norm then
+      aggregate_memory(failover_hosts).megabytes
+    when :vcpu_high_norm then
+      hosts.join(:hardware).where(:failover => true).sum(Hardware.arel_attribute(:aggregate_cpu_speed))
     end
   end
 
