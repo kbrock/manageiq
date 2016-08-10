@@ -185,8 +185,7 @@ module Rbac
         scope = apply_scope(targets, scope)
 
         unless klass.respond_to?(:find)
-          klass = targets
-          klass = klass.klass if klass.respond_to?(:klass)
+          klass = to_klass(targets)
           # working around MiqAeDomain not being in rbac_class
           klass = klass.base_class if klass.respond_to?(:base_class) && rbac_class(klass).nil? && rbac_class(klass.base_class)
         end
@@ -260,7 +259,7 @@ module Rbac
     end
 
     def rbac_class(scope)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+      klass = to_klass(scope)
       return klass if apply_rbac_to_class?(klass)
       if apply_rbac_to_associated_class?(klass)
         return klass.name[0..-12].constantize.base_class # e.g. VmPerformance => VmOrTemplate
@@ -284,7 +283,7 @@ module Rbac
     end
 
     def calc_filtered_ids(scope, user_filters, user, miq_group)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+      klass = to_klass(scope)
       u_filtered_ids = pluck_ids(get_self_service_objects(user, miq_group, klass))
       b_filtered_ids = get_belongsto_filter_object_ids(klass, user_filters['belongsto'])
       m_filtered_ids = pluck_ids(get_managed_filter_object_ids(scope, user_filters['managed']))
@@ -365,7 +364,7 @@ module Rbac
     end
 
     def get_managed_filter_object_ids(scope, filter)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+      klass = to_klass(scope)
       return nil if !TAGGABLE_FILTER_CLASSES.include?(safe_base_class(klass).name) || filter.blank?
       scope.find_tags_by_grouping(filter, :ns => '*').reorder(nil)
     end
@@ -376,7 +375,7 @@ module Rbac
     end
 
     def scope_by_user_group_rbac(scope, user, miq_group)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+      klass = to_klass(scope)
       if klass == User && user
         scope.where(:id => user.id)
       elsif klass == MiqGroup
@@ -387,7 +386,7 @@ module Rbac
     end
 
     def scope_to_tenant(scope, user, miq_group)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+      klass = to_klass(scope)
       user_or_group = user || miq_group
       tenant_id_clause = klass.tenant_id_clause(user_or_group)
 
@@ -445,8 +444,15 @@ module Rbac
       end
     end
 
+    # class can come in as a string, symbol, or class, this normalizes to a class object
     def to_class(klass)
       klass.kind_of?(String) || klass.kind_of?(Symbol) ? klass.to_s.constantize : klass
+    end
+
+    # we sometimes pass around class objects, and other times scopes. this normalizes to the model class
+    # TODO: remove the `respond_to?` check and ensure we're always passing around a scope
+    def to_klass(scope)
+      scope.respond_to?(:klass) ? scope.klass : scope
     end
 
     def apply_scope(klass, scope)
