@@ -452,6 +452,7 @@ module Rbac
     # we sometimes pass around class objects, and other times scopes. this normalizes to the model class
     # TODO: remove the `respond_to?` check and ensure we're always passing around a scope
     def to_klass(scope)
+      raise "WIP" if !scope.respond_to?(:klass)
       scope.respond_to?(:klass) ? scope.klass : scope
     end
 
