@@ -15,17 +15,24 @@ class TreeBuilderVmsAndTemplates < FullTreeBuilder
     #   converting the folders to real objects.  For the VMs we only need ids,
     #   so taking them from the relationship records can cut down on the huge
     #   VM query.
-    tree = root.subtree_arranged
+
+    vm_filter = include_vms? ? {} : {:of_type => %w(ExtManagementSystem EmsFolder EmsCluster)}
+
+    tree = root.subtree_arranged(vm_filter)
 
     prune_non_vandt_folders(tree)
     reparent_hidden_folders(tree)
-    prune_rbac(tree)
+    prune_rbac(tree) if include_vms?
     sort_tree(tree)
 
     tree
   end
 
   private
+
+  def include_vms?
+    options.fetch(:show_vms) { true }
+  end
 
   def prune_non_vandt_folders(tree, parent = nil)
     tree.reject! do |object, children|
