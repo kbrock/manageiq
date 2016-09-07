@@ -228,15 +228,14 @@ module RelationshipMixin
   # Returns a list of the path records, starting with the root record and ending
   #   with the node's own record
   def path(*args)
-    return [self] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in an Array?
-    Relationship.resources(path_rels(*args)) # TODO: Prevent preload of self which is in the list
+    # TODO: Prevent preload of self which is in the list
+    Relationship.resources(path_rels(*args)).presence || [self]
   end
 
   # Returns a list of the path class/id pairs, starting with the root class/id
   #   and ending with the node's own class/id
   def path_ids(*args)
-    return [[self.class.base_class.name, id]] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in a Array?
-    Relationship.resource_pairs(path_rels(*args))
+    Relationship.resource_pairs(path_rels(*args)) || return [[self.class.base_class.name, id]]
   end
 
   # Returns the number of records in the path
@@ -358,14 +357,13 @@ module RelationshipMixin
 
   # Returns a list of all records in the record's subtree
   def subtree(*args)
-    return [self] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in an Array?
-    Relationship.resources(subtree_rels(*args)) # TODO: Prevent preload of self which is in the list
+    # TODO: Prevent preload of self which is in the list
+    Relationship.resources(subtree_rels(*args)).presence? || [self]
   end
 
   # Returns a list of all class/id pairs in the record's subtree
   def subtree_ids(*args)
-    return [[self.class.base_class.name, id]] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in an Array?
-    Relationship.resource_pairs(subtree_rels(*args))
+    Relationship.resource_pairs(subtree_rels(*args)).presence || [[self.class.base_class.name, id]]
   end
 
   # Returns the number of records in the record's subtree
@@ -384,14 +382,12 @@ module RelationshipMixin
 
   # Returns the subtree class/id pairs arranged in a tree
   def subtree_ids_arranged(*args)
-    return {[self.class.base_class.name, id] => {}} if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in a Hash?
-    Relationship.arranged_rels_to_resource_pairs(subtree_rels_arranged(*args))
+    Relationship.arranged_rels_to_resource_pairs(subtree_rels_arranged(*args)).presence || {[self.class.base_class.name, id] => {}}
   end
 
   # Returns the subtree records arranged in a tree
   def subtree_arranged(*args)
-    return {self => {}} if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in a Hash?
-    Relationship.arranged_rels_to_resources(subtree_rels_arranged(*args))
+    Relationship.arranged_rels_to_resources(subtree_rels_arranged(*args)).presence || {self => {}}
   end
 
   # Return the depth of the node, root nodes are at depth 0
@@ -468,14 +464,13 @@ module RelationshipMixin
 
   # Returns a list of all records in the tree from the root
   def fulltree(*args)
-    return [self] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in an Array?
-    Relationship.resources(fulltree_rels(*args)) # TODO: Prevent preload of self which is in the list
+    # TODO: Prevent preload of self which is in the list
+    Relationship.resources(fulltree_rels(*args)).presence || [self]
   end
 
   # Returns a list of all class/id pairs in the tree from the root
   def fulltree_ids(*args)
-    return [[self.class.base_class.name, id]] if self.is_isolated_root? # TODO: Should this return nil or init_relationship or Relationship.new in an Array?
-    Relationship.resource_pairs(fulltree_rels(*args))
+    Relationship.resource_pairs(fulltree_rels(*args)).presence || [[self.class.base_class.name, id]]
   end
 
   # Returns the number of records in the tree from the root
