@@ -9,6 +9,7 @@ class Zone < ApplicationRecord
   belongs_to      :log_file_depot, :class_name => "FileDepot"
 
   has_many :miq_servers
+  has_many :active_miq_servers, -> { active_miq_servers }, :class_name => "MiqServer"
   has_many :ext_management_systems
   has_many :miq_schedules, :dependent => :destroy
   has_many :storage_managers
@@ -18,7 +19,6 @@ class Zone < ApplicationRecord
   has_many :hosts,               :through => :ext_management_systems
   has_many :clustered_hosts,     :through => :ext_management_systems
   has_many :non_clustered_hosts, :through => :ext_management_systems
-  virtual_has_many :active_miq_servers, :class_name => "MiqServer"
   virtual_has_many :vms_and_templates,  :uses => {:ext_management_systems => :vms_and_templates}
 
   before_destroy :check_zone_in_use_on_destroy
@@ -29,10 +29,6 @@ class Zone < ApplicationRecord
   include Metric::CiMixin
   include AggregationMixin
   include ConfigurationManagementMixin
-
-  def active_miq_servers
-    MiqServer.active_miq_servers.where(:zone_id => id)
-  end
 
   def servers_for_settings_reload
     miq_servers.where(:status => "started")
