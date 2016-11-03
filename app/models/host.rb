@@ -191,6 +191,14 @@ class Host < ApplicationRecord
     true
   end
 
+  def self.non_clustered
+    where(:ems_cluster_id => nil)
+  end
+
+  def self.clustered
+    where.not(:ems_cluster_id => nil)
+  end
+
   def authentication_check_role
     'smartstate'
   end
@@ -324,6 +332,10 @@ class Host < ApplicationRecord
 
   def has_active_ems?
     !!ext_management_system
+  end
+
+  def clustered?
+    ems_cluster_id.present?
   end
 
   def run_ipmi_command(verb)
