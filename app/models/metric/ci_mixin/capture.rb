@@ -148,22 +148,6 @@ module Metric::CiMixin::Capture
       interval_name_for_capture = interval_name
     end
 
-    # Determine the expected start time, so we can detect gaps or missing data
-    expected_start_range = start_time
-    # If we've changed power state within the last hour, the returned data
-    #   may not include all the data we'd expect
-    expected_start_range = nil if self.respond_to?(:state_changed_on) && state_changed_on && state_changed_on > Time.now.utc - 1.hour
-
-    unless expected_start_range.nil?
-      # Shift the expected time for first item, since you may not get back an
-      #   item for the first timestamp.
-      case interval_name
-      when 'realtime' then expected_start_range += (1.minute / Metric::Capture::REALTIME_METRICS_PER_MINUTE)
-      when 'hourly'   then expected_start_range += 1.hour
-      end
-      expected_start_range = expected_start_range.iso8601
-    end
-
     _log.info "#{log_header} Capture for #{log_target}#{log_time}..."
 
     start_range = end_range = counters = counter_values = nil
@@ -187,6 +171,11 @@ module Metric::CiMixin::Capture
       # Set the last capture on to end_time to prevent forever queueing up the same collection range
       update_attributes(:last_perf_capture_on => end_time || Time.now.utc) if interval_name == 'realtime'
     else
+      # Determine the expected start time, so we can detect gaps or missing data
+      if start_time && !state_change_recently?
+        expected_start_range = (start_time + perf_capture_allowance(interval_name)).iso8601
+      end
+
       if expected_start_range && start_range > expected_start_range
         _log.warn "#{log_header} For #{log_target}#{log_time}, expected to get data as of [#{expected_start_range}], but got data as of [#{start_range}]."
 
@@ -227,6 +216,22 @@ module Metric::CiMixin::Capture
         _log.info("Updating task id: [#{task.id}] #{task.message}")
         task.save!
       end
+    end
+  end
+
+  # If we've changed power state within the last hour, the returned data
+  #   may not include all the data we'd expect
+  def state_change_recently?
+    try(:state_changed_on) && state_changed_on <= 1.hour.ago
+  end
+
+  # Shift the expected time for first item, since you may not get back an
+  #   item for the first timestamp.
+  def perf_capture_allowance(interval_name)
+    case interval_name
+    when 'realtime' then (1.minute / Metric::Capture::REALTIME_METRICS_PER_MINUTE)
+    when 'hourly'   then 1.hour
+    else                 0.minutes
     end
   end
 
