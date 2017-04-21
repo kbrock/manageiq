@@ -30,8 +30,8 @@ module Metric::CiMixin::Capture
   private :split_capture_intervals
 
   def perf_capture_queue(interval_name, options = {})
-    start_time = options[:start_time]
-    end_time   = options[:end_time]
+    start_time = options[:start_time].try!(:utc)
+    end_time   = options[:end_time].try!(:utc)
     priority   = options[:priority] || Metric::Capture.const_get("#{interval_name.upcase}_PRIORITY")
     task_id    = options[:task_id]
     zone       = options[:zone] || my_zone
@@ -42,14 +42,11 @@ module Metric::CiMixin::Capture
     raise ArgumentError, "end_time cannot be specified if start_time is nil" if start_time.nil? && !end_time.nil?
     raise ArgumentError, "target does not have an ExtManagementSystem" if ems.nil?
 
-    start_time = start_time.utc unless start_time.nil?
-    end_time = end_time.utc unless end_time.nil?
-
     # Determine the items to queue up
     # cb is the task used to group cluster realtime metrics
     cb = nil
     if interval_name == 'historical'
-      start_time = Metric::Capture.historical_start_time if start_time.nil?
+      start_time ||= Metric::Capture.historical_start_time
       end_time ||= 1.day.from_now.utc.beginning_of_day # Ensure no more than one historical collection is queue up in the same day
       items = split_capture_intervals(interval_name, start_time, end_time)
     else
@@ -139,16 +136,14 @@ module Metric::CiMixin::Capture
 
     # Determine the start_time for capturing if not provided
     if interval_name == 'historical'
-      start_time = Metric::Capture.historical_start_time if start_time.nil?
+      start_time ||= Metric::Capture.historical_start_time
 
       interval_name_for_capture = 'hourly'
     else
-      start_time = last_perf_capture_on if start_time.nil?
-      if start_time.nil? && interval_name == 'hourly'
-        # For hourly on the first capture, we don't want to get all of the
-        #   historical data, so we shorten the query
-        start_time = 4.hours.ago.utc
-      end
+      start_time ||= last_perf_capture_on
+      # For hourly on the first capture, we don't want to get all of the
+      #   historical data, so we shorten the query
+      start_time ||= 4.hours.ago.utc if interval_name == 'hourly'
 
       interval_name_for_capture = interval_name
     end
