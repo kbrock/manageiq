@@ -46,8 +46,7 @@ module Metric::Capture
     targets = Metric::Targets.capture_targets(zone)
 
     targets_by_rollup_parent = calc_targets_by_rollup_parent(targets)
-    tasks_by_rollup_parent   = calc_tasks_by_rollup_parent(targets_by_rollup_parent)
-    target_options = calc_target_options(zone, targets, targets_by_rollup_parent, tasks_by_rollup_parent)
+    target_options = calc_target_options(zone, targets_by_rollup_parent)
     targets = filter_perf_capture_now(targets, target_options)
     queue_captures(targets, target_options)
 
@@ -145,12 +144,13 @@ module Metric::Capture
 
   # Create task for ems host cluster rollups
   # {"EmsCluster:4" => Task{1}, "EmsCluster:5" => Task{2} }
-  def self.calc_tasks_by_rollup_parent(targets_by_rollup_parent)
+  def self.calc_target_options(zone, targets_by_rollup_parent)
     task_end_time           = Time.now.utc.iso8601
     default_task_start_time = 1.hour.ago.utc.iso8601
 
+    target_options = Hash.new { |h, k| h[k] = {:zone => zone} }
     # Create a new task for each rollup parent
-    targets_by_rollup_parent.keys.each_with_object({}) do |pkey, h|
+    targets_by_rollup_parent.keys.each do |pkey|
       name = "Performance rollup for #{pkey}"
       prev_task = MiqTask.where(:identifier => pkey).order("id DESC").first
       task_start_time = prev_task ? prev_task.context_data[:end] : default_task_start_time
@@ -171,28 +171,15 @@ module Metric::Capture
         }
       )
       _log.info "Created task id: [#{task.id}] for: [#{pkey}] with targets: #{targets_by_rollup_parent[pkey].inspect} for time range: [#{task_start_time} - #{task_end_time}]"
-      h[pkey] = task
-    end
-  end
-  private_class_method :calc_tasks_by_rollup_parent
-
-  def self.calc_target_options(zone, targets, targets_by_rollup_parent, tasks_by_rollup_parent)
-    targets.each_with_object({}) do |target, all_options|
-      interval_name = perf_target_to_interval_name(target)
-
-      options = {:zone => zone}
-      target.perf_rollup_parents(interval_name).to_a.compact.each do |parent|
-        if tasks_by_rollup_parent.key?("#{parent.class}:#{parent.id}")
-          pkey = "#{parent.class}:#{parent.id}"
-          tkey = "#{target.class}:#{target.id}"
-          if targets_by_rollup_parent[pkey].include?(tkey)
-            options[:task_id] = tasks_by_rollup_parent[pkey].id
-            options[:force]   = true # Force collection since we've already verified that capture should be done now
-          end
-        end
+      targets_by_rollup_parent[pkey].each do |target|
+        target_options[target] = {
+          :task_id => task.id,
+          :force   => true, # Force collection since we've already verified that capture should be done now
+          :zone    => zone,
+        }
       end
-      all_options[target] = options
     end
+    target_options
   end
   private_class_method :calc_target_options
 
