@@ -38,11 +38,12 @@ module Metric::Capture
                 ::Settings.performance.capture_threshold_with_alerts.default)
   end
 
+  # COORDINATOR
+  # NOTE: put_unless_exists prevents multiple running at same time
   def self.perf_capture_timer(zone = nil)
     _log.info "Queueing performance capture..."
 
     zone ||= MiqServer.my_server.zone
-    perf_capture_health_check(zone)
     targets = Metric::Targets.capture_targets(zone)
 
     targets_by_rollup_parent = calc_targets_by_rollup_parent(targets)
@@ -109,23 +110,6 @@ module Metric::Capture
   #
   # Capture entry points
   #
-
-  def self.perf_capture_health_check(zone)
-    q_items = MiqQueue.select(:method_name, :created_on).order(:created_on)
-              .where(:state       => "ready",
-                     :role        => "ems_metrics_collector",
-                     :method_name => %w(perf_capture perf_capture_realtime perf_capture_hourly perf_capture_historical),
-                     :zone        => zone.name)
-    items_by_interval = q_items.group_by(&:method_name)
-    items_by_interval.reverse_merge!("perf_capture_realtime" => [], "perf_capture_hourly" => [], "perf_capture_historical" => [])
-    items_by_interval.each do |method_name, items|
-      interval = method_name.sub("perf_capture_", "")
-      msg = "#{items.length} #{interval.inspect} captures on the queue for zone [#{zone.name}]"
-      msg << " - oldest: [#{items.first.created_on.utc.iso8601}], recent: [#{items.last.created_on.utc.iso8601}]" if items.length > 0
-      _log.info(msg)
-    end
-  end
-  private_class_method :perf_capture_health_check
 
   # Collect realtime targets and group them by their rollup parent
   #   e.g.: {"EmsCluster:4"=>[Host:4], "EmsCluster:5"=>[Host:1, Host:2]}

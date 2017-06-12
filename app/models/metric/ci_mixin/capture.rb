@@ -32,22 +32,15 @@ module Metric::CiMixin::Capture
   def perf_capture_queue(interval_name, options = {})
     start_time = options[:start_time]
     end_time   = options[:end_time]
-    priority   = options[:priority] || Metric::Capture.const_get("#{interval_name.upcase}_PRIORITY")
     task_id    = options[:task_id]
-    zone       = options[:zone] || my_zone
-    zone = zone.name if zone.respond_to?(:name)
-    ems        = ems_for_capture_target
 
     raise ArgumentError, "invalid interval_name '#{interval_name}'" unless Metric::Capture::VALID_CAPTURE_INTERVALS.include?(interval_name)
     raise ArgumentError, "end_time cannot be specified if start_time is nil" if start_time.nil? && !end_time.nil?
-    raise ArgumentError, "target does not have an ExtManagementSystem" if ems.nil?
 
     start_time = start_time.utc unless start_time.nil?
     end_time = end_time.utc unless end_time.nil?
 
     # Determine the items to queue up
-    # cb is the task used to group cluster realtime metrics
-    cb = nil
     if interval_name == 'historical'
       start_time = Metric::Capture.historical_start_time if start_time.nil?
       end_time ||= 1.day.from_now.utc.beginning_of_day # Ensure no more than one historical collection is queue up in the same day
@@ -66,63 +59,18 @@ module Metric::CiMixin::Capture
         else
           [interval_name]
         end
-
-      cb = {:class_name => self.class.name, :instance_id => id, :method_name => :perf_capture_callback, :args => [[task_id]]} if task_id
     end
-
-    # Queue up the actual items
-    queue_item = {
-      :class_name  => self.class.name,
-      :instance_id => id,
-      :role        => 'ems_metrics_collector',
-      :queue_name  => ems.metrics_collector_queue_name,
-      :zone        => zone,
-      :state       => ['ready', 'dequeue'],
-    }
 
     items.each do |item_interval, *start_and_end_time|
       # Should both interval name and args (dates) be part of uniqueness query?
-      queue_item_options = queue_item.merge(:method_name => "perf_capture_#{item_interval}")
-      queue_item_options[:args] = start_and_end_time if start_and_end_time.present?
-      MiqQueue.put_or_update(queue_item_options) do |msg, qi|
-        if msg.nil?
-          qi[:priority] = priority
-          qi.delete(:state)
-          if cb && item_interval == "realtime"
-            qi[:miq_callback] = cb
-          end
-          qi
-        elsif msg.state == "ready" && (task_id || MiqQueue.higher_priority?(priority, msg.priority))
-          qi[:priority] = priority
-          # rerun the job (either with new task or higher priority)
-          qi.delete(:state)
-          if task_id
-            existing_tasks = (((msg.miq_callback || {})[:args] || []).first) || []
-            qi[:miq_callback] = cb.merge(:args => [existing_tasks + [task_id]]) if item_interval == "realtime"
-          end
-          qi
-        else
-          interval = qi[:method_name].sub("perf_capture_", "")
-          _log.debug "Skipping capture of #{log_target} - Performance capture for interval #{interval} is still running"
-          # NOTE: do not update the message queue
-          nil
-        end
-      end
+      args = start_and_end_time if start_and_end_time.present?
+
+      perf_capture(item_interval, *args)
+      perf_capture_callback(task_id) if task_id && item_interval == "realtime"
     end
   end
 
-  def perf_capture_realtime(*args)
-    perf_capture('realtime', *args)
-  end
-
-  def perf_capture_hourly(*args)
-    perf_capture('hourly', *args)
-  end
-
-  def perf_capture_historical(*args)
-    perf_capture('historical', *args)
-  end
-
+  # COLLECTOR
   def perf_capture(interval_name, start_time = nil, end_time = nil)
     unless Metric::Capture::VALID_CAPTURE_INTERVALS.include?(interval_name)
       raise ArgumentError, _("invalid interval_name '%{name}'") % {:name => interval_name}
@@ -224,7 +172,7 @@ module Metric::CiMixin::Capture
           parent = pclass.constantize.find(pid)
           msg = "Queueing [#{task.context_data[:interval]}] rollup to #{parent.class.name} id: [#{parent.id}] for time range: [#{task.context_data[:start]} - #{task.context_data[:end]}]"
           _log.info "#{msg}..."
-          parent.perf_rollup_range_queue(task.context_data[:start], task.context_data[:end], task.context_data[:interval])
+          parent.perf_rollup_range(task.context_data[:start], task.context_data[:end], task.context_data[:interval])
           _log.info "#{msg}...Complete"
         else
           task.state, task.status, task.message = [MiqTask::STATE_ACTIVE, MiqTask::STATUS_OK, task.message = "Performance collection active, #{task.context_data[:complete].length} out of #{task.context_data[:targets].length} collections completed"]
@@ -239,10 +187,10 @@ module Metric::CiMixin::Capture
     VimPerformanceState.capture(self)
   end
 
-  def perf_capture_realtime_now
+  def perf_capture_realtime_now # ADD QUEUE
     # For UI to enable refresh of realtime charts on demand
     _log.info "Realtime capture requested for #{log_target}"
 
-    perf_capture_queue('realtime', :priority => MiqQueue::HIGH_PRIORITY)
+    perf_capture_queue('realtime')
   end
 end
