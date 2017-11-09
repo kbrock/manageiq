@@ -1,0 +1,14 @@
+#/usr/bin/env bash
+
+# -c will provide counts as well
+
+if [[ $# = 0 ]] ; then
+  cat log/evm.log <(zcat log/evm.log-2* 2>/dev/null) |grep ::Runner#g |sed 's/^[^(]*MIQ(\([^)]*\)::Runner#get_message_via_drb).*$/\1/' | sort | uniq $*| sort -nr
+  exit 0
+fi
+
+# how are the messages processed?
+cat log/evm.log <(zcat log/evm.log-2* 2>/dev/null) |grep ::Runner#g |sed 's/^[^(]*MIQ(\([^)]*\)::Runner#get_message_via_drb).*$/\1/' | sort | uniq -c| sort -nr
+
+# how is the queue?
+echo "select queue_name, class_name || '.' || method_name as "method", count(*) from miq_queue group by 1,2 order by 1,3 desc;" | psql vmdb_production

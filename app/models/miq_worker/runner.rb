@@ -503,7 +503,7 @@ class MiqWorker::Runner
   def process_message(message, *args)
     meth = "message_#{message}"
     if self.respond_to?(meth)
-      send(meth, *args)
+      send(meth, *args).tap { _log.info MemoryLogger.log("#{log_prefix} LOG MEMORY process_message #{meth}") }
     else
       _log.warn("#{log_prefix} Message [#{message}] is not recognized, ignoring")
     end

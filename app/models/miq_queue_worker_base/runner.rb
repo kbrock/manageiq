@@ -127,6 +127,9 @@ class MiqQueueWorkerBase::Runner < MiqWorker::Runner
       # This is a NOOP if global broker handle is not set.
       #
       clean_broker_connection
+      _log.info MemoryLogger.log "#{log_prefix} LOG MEMORY deliver_queue_message" \
+                 ", Command: [#{msg.class_name}.#{msg.method_name}], Instance id: [#{msg.instance_id}]"
+                 # ... ", Args: #{MiqPassword.sanitize_string(msg.args.inspect)}"
     end
   end
 
