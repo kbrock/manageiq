@@ -1772,4 +1772,8 @@ class VmOrTemplate < ApplicationRecord
   end
 
   private_class_method :arel_coalesce
+
+  def self.type_condition(table = arel_table)
+    super unless (self == Vm || self == MiqTemplate || self == VmOrTemplate)
+  end
 end

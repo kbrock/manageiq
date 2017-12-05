@@ -13,6 +13,12 @@ RSpec.describe Vm do
     expect(ManageIQ::Providers::Redhat::InfraManager::Vm.corresponding_template_model).to eq(ManageIQ::Providers::Redhat::InfraManager::Template)
   end
 
+  context "#template" do
+    it "defaults to false" do
+      expect(described_class.new.template).to eq(false)
+    end
+  end
+
   context "#template=" do
     before { @vm = FactoryBot.create(:vm_vmware) }
 
