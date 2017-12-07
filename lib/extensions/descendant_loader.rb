@@ -46,7 +46,11 @@
 #   condition, `Ccc` is automatically loaded.
 #
 class DescendantLoader
+  if $original == 1
+  CACHE_VERSION = 3
+  else
   CACHE_VERSION = 2
+  end
 
   def self.instance
     @instance ||= new
@@ -83,19 +87,34 @@ class DescendantLoader
       classes.map do |(scopes, (_, name, sklass))|
         next unless sklass
 
-        scope_names = scopes.map { |s| flatten_name(s) }
-        search_combos = name_combinations(scope_names)
-
         # We're assuming this is the original class definition, so it
         # will definitely be defined inside the innermost containining
         # scope. We're just not sure how that scope plays out relative
         # to its parents.
-        if (container_name = scope_names.pop)
-          define_combos = scoped_name(container_name, name_combinations(scope_names))
+        if scopes.size == 0
+          search_combos = [""]
+          define_combos = [""]
+        elsif scopes.size == 1
+          scope_names = scopes.map { |s| flatten_name(s) }
+          search_combos = name_combinations(scope_names)
+            # puts scopes.size
+            # puts "#{scope_names.inspect}"
+            # puts "#{search_combos.inspect}"
+          define_combos = search_combos[0..-2]
         else
-          define_combos = search_combos.dup
+          scope_names = scopes.map { |s| flatten_name(s) }
+          search_combos = name_combinations(scope_names)
+            # puts scopes.size
+            # puts "#{scope_names.inspect}"
+            # puts "#{search_combos.inspect}"
+            # puts "..."
+          container_name = scope_names.pop
+          define_combos = scoped_name(container_name, name_combinations(scope_names))
+            # puts "#{scope_names.inspect}"
+            # puts "#{name_combinations(scope_names).inspect}"
+            # puts "#{define_combos.inspect}"
+            # puts "."
         end
-
         [search_combos, define_combos, flatten_name(name), flatten_name(sklass)]
       end.compact
     end
@@ -143,29 +162,38 @@ class DescendantLoader
     end
 
     def name_combinations(names)
-      combos = [[]]
-      names.size.times do |n|
-        combos += names.combination(n + 1).to_a
-      end
+      combos = names.size.times.flat_map { |n| names.combination(n + 1).to_a }
       combos.each do |combo|
+        # TODO:  s[0,2] == "::"
+        # NOTE: none of these trigger
         if (i = combo.rindex { |s| s =~ /^::/ })
           combo.slice!(0, i)
           combo[0] = combo[0].sub(/^::/, '')
         end
       end
-      combos.map { |c| c.join('::') }.uniq.reverse
+      combos.map { |c| c.join('::') }.uniq.reverse << ""
     end
   end
 
   # RubyParser is slow, so wrap it in a simple mtime-based cache.
   module Cache
+    if $original == 1
+    def cache_path
+      Rails.root.join('tmp/cache/sti_loader.json')
+    end
+    else
     def cache_path
       Rails.root.join('tmp/cache/sti_loader.yml')
+    end
     end
 
     def load_cache
       return unless cache_path.exist?
+      if $original == 1
+      data = JSON.load(cache_path)
+      else
       data = YAML.load_file(cache_path)
+      end
       return unless data && data.kind_of?(Hash) && data['@version'].to_i == CACHE_VERSION
       data
     rescue
@@ -180,12 +208,16 @@ class DescendantLoader
       return unless @cache_dirty
       cache_path.parent.mkpath
       cache_path.open('w') do |f|
+        if $original == 1
+        JSON.dump(cache, f)
+        else
         YAML.dump(cache, f)
+        end
       end
     end
 
     def classes_in(filename)
-      t = File.mtime(filename)
+      t = File.mtime(filename).to_i
 
       if (entry = cache[filename])
         return entry[:parsed] if entry[:mtime] == t
@@ -239,6 +271,8 @@ class DescendantLoader
   end
 
   def scoped_name(name, scopes)
+    # if name[0,2] == "::"
+    #   name = [name[2..-1]]
     if name =~ /^::(.*)/
       name = [$1]
     else
