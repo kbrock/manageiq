@@ -101,7 +101,11 @@ class MiqQueueWorkerBase::Runner < MiqWorker::Runner
       $_miq_worker_current_msg = msg
       Thread.current[:tracking_label] = msg.tracking_label || msg.task_id
       heartbeat_message_timeout(msg)
-      status, message, result = msg.deliver
+
+      status, message, result =
+        ActiveSupport::Notifications.instrument("#{self.class.name}.deliver_queue_message", message: msg) do
+           msg.deliver
+        end
 
       if status == MiqQueue::STATUS_TIMEOUT
         begin

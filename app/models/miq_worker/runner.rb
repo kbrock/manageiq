@@ -410,9 +410,9 @@ class MiqWorker::Runner
     interval = worker_settings[:gc_interval] || 15.minutes
     interval = 1.minute if interval < 1.minute
     if @last_gc.nil? || @last_gc + interval < t
-      gc_time = Benchmark.realtime { ObjectSpace.garbage_collect }
-      gc_meth = gc_time >= 5 ? :warn : :debug
-      $log.send(gc_meth, "#{log_prefix} Garbage collection took #{gc_time} seconds")
+      ActiveSupport::Notifications.instrument("#{self.class.name}.do_gc") do
+        ObjectSpace.garbage_collect
+      end
       @last_gc = t
     end
   end
@@ -503,7 +503,9 @@ class MiqWorker::Runner
   def process_message(message, *args)
     meth = "message_#{message}"
     if self.respond_to?(meth)
-      send(meth, *args)
+      ActiveSupport::Notifications.instrument("#{self.class.name}.process_message", :method => meth) do
+        send(meth, *args)
+      end
     else
       _log.warn("#{log_prefix} Message [#{message}] is not recognized, ignoring")
     end
