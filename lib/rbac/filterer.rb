@@ -420,17 +420,19 @@ module Rbac
       klass.user_or_group_owned(user, miq_group).except(:order)
     end
 
-    def calc_filtered_ids(scope, user_filters, user, miq_group, scope_tenant_filter)
-      klass = scope.respond_to?(:klass) ? scope.klass : scope
+    # @param associated_scope [Relation] scope where the fetched ids reside
+    def calc_filtered_ids(associated_scope, user_filters, user, miq_group, scope_tenant_filter)
+      klass = associated_scope.respond_to?(:klass) ? associated_scope.klass : associated_scope
       expression = miq_group.try(:entitlement).try(:filter_expression)
       expression.set_tagged_target(klass) if expression
       u_filtered_ids = pluck_ids(self_service_ownership_scope(user, miq_group, klass))
       b_filtered_ids = get_belongsto_filter_object_ids(klass, user_filters['belongsto'])
-      m_filtered_ids = pluck_ids(get_managed_filter_object_ids(scope, expression || user_filters['managed']))
+      m_filtered_ids = pluck_ids(get_managed_filter_object_ids(associated_scope, expression || user_filters['managed']))
       d_filtered_ids = pluck_ids(matches_via_descendants(rbac_class(klass), user_filters['match_via_descendants'],
                                                          :user => user, :miq_group => miq_group))
+      t_filtered_ids = scope_tenant_filter.try(:ids)
 
-      combine_filtered_ids(u_filtered_ids, b_filtered_ids, m_filtered_ids, d_filtered_ids, scope_tenant_filter.try(:ids))
+      combine_filtered_ids(u_filtered_ids, b_filtered_ids, m_filtered_ids, d_filtered_ids, t_filtered_ids)
     end
 
     #
@@ -473,16 +475,12 @@ module Rbac
     # @return [scope] scope for targets
     def scope_by_filter(scope, parent_class, user_filters, user, miq_group, scope_tenant_filter)
       filtered_ids = calc_filtered_ids(parent_class, user_filters, user, miq_group, scope_tenant_filter)
-      if filtered_ids
-        if parent_class == scope # traditional filtering
-          scope.where(:id => filtered_ids)
-        elsif (reflection = scope.reflections[parent_class.name.underscore])
-          scope.where(reflection.foreign_key.to_sym => filtered_ids)
-        else
-          scope.where(:resource_type => parent_class.name, :resource_id => filtered_ids)
-        end
+      if parent_class == scope # traditional filtering
+        filtered_ids ? scope.where(:id => filtered_ids) : scope
+      elsif (reflection = scope.reflections[parent_class.name.underscore])
+        filtered_ids ? scope.where(reflection.foreign_key.to_sym => filtered_ids) : scope
       else
-        scope
+        filtered_ids ? scope.where(:resource_type => parent_class.name).where(:resource_id => filtered_ids) : scope
       end
     end
 
