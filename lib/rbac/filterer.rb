@@ -459,14 +459,24 @@ module Rbac
       intersection.call(u_union_d_union_b_intersection_m, tenant_filter_ids)
     end
 
-    # @param parent_class [Class] Class of parent (e.g. Host)
-    # @param klass [Class] Class of child node (e.g. Vm)
-    # @param scope [] scope for active records (e.g. Vm.archived)
-    # @param filtered_ids [nil|Array<Integer>] ids for the parent class (e.g. [1,2,3] for host)
-    # @return [Array<Array<Object>,Integer,Integer] targets, authorized count
-    def scope_by_parent_ids(parent_class, scope, filtered_ids)
+    # setup a filter on a scope
+    # Typically a class has the necessary ids, and will be filtered on its own id
+    # But in cases where it is filtered by an associated class, a parent_class is passed in
+    # It will either be filtered by the associated class (aka parent class), or by itself.
+    # @param scope [Relation] scope for active records (e.g. Vm.archived) This is the class that is brought back.
+    # @param parent_class [Class] Class of parent (e.g. Host) This is the class that has the filtering
+    # @param user_filters [Hash] managed, belongs to, matchviadescendant filtering values
+    # @param user [User|nil] user with privileges
+    # @param miq_group [MiqGroup] group of user with privileges
+    # @param scope_tenant_filter [Relation] scope for tenancy (when filtering on parent_class rather than scope)
+
+    # @return [scope] scope for targets
+    def scope_by_filter(scope, parent_class, user_filters, user, miq_group, scope_tenant_filter)
+      filtered_ids = calc_filtered_ids(parent_class, user_filters, user, miq_group, scope_tenant_filter)
       if filtered_ids
-        if (reflection = scope.reflections[parent_class.name.underscore])
+        if parent_class == scope # traditional filtering
+          scope.where(:id => filtered_ids)
+        elsif (reflection = scope.reflections[parent_class.name.underscore])
           scope.where(reflection.foreign_key.to_sym => filtered_ids)
         else
           scope.where(:resource_type => parent_class.name, :resource_id => filtered_ids)
@@ -550,8 +560,7 @@ module Rbac
       end
 
       if apply_rbac_directly?(klass)
-        filtered_ids = calc_filtered_ids(scope, rbac_filters, user, miq_group, nil)
-        scope_by_ids(scope, filtered_ids)
+        scope_by_filter(scope, scope, rbac_filters, user, miq_group, nil)
       elsif apply_rbac_through_association?(klass)
         # if subclasses of MetricRollup or Metric, use the associated
         # model to derive permissions from
@@ -561,8 +570,7 @@ module Rbac
           scope_tenant_filter = scope_to_tenant(associated_class, user, miq_group)
         end
 
-        filtered_ids = calc_filtered_ids(associated_class, rbac_filters, user, miq_group, scope_tenant_filter)
-        scope_by_parent_ids(associated_class, scope, filtered_ids)
+        scope_by_filter(scope, associated_class, rbac_filters, user, miq_group, scope_tenant_filter)
       elsif [MiqUserRole, MiqGroup, User].include?(klass)
         scope_for_user_role_group(klass, scope, miq_group, user, rbac_filters['managed'])
       elsif klass == Tenant
