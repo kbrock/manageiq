@@ -50,9 +50,12 @@ describe Metric::Capture do
         stub_settings_merge(:performance => {:history => {:initial_capture_days => 7}})
         Metric::Capture.perf_capture_timer(@ems_vmware.id)
 
-        expect(MiqQueue.group(:class_name, :method_name).count).to eq(expected_queue_items)
-        targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload)
-        expect(queue_intervals).to match_array(queue_items_for_targets(targets))
+        Timecop.freeze do
+          expect(MiqQueue.group(:class_name, :method_name).count).to eq(expected_queue_items)
+          targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload)
+          expect(queue_intervals).to match_array(queue_items_for_targets(targets))
+          expect(queue_timings).to eq(queue_timings_for_targets(targets))
+        end
       end
 
       it "calling perf_capture_timer when existing capture messages are on the queue in dequeue state should NOT merge" do
@@ -95,6 +98,7 @@ describe Metric::Capture do
           expect(MiqQueue.group(:class_name, :method_name).count).to eq(expected_queue_items)
           targets = Metric::Targets.capture_ems_targets(@ems_openstack.reload)
           expect(queue_intervals).to match_array(queue_items_for_targets(targets))
+          expect(queue_timings).to eq(queue_timings_for_targets(targets))
         end
       end
     end
@@ -163,18 +167,18 @@ describe Metric::Capture do
       end
 
       context "executing perf_capture_gap" do
-        before do
-          t = Time.now.utc
-          Metric::Capture.perf_capture_gap(t - 7.days, t - 5.days)
-        end
-
         it "should queue up enabled targets for historical" do
-          expect(MiqQueue.count).to eq(10)
+          Timecop.freeze do
+            Metric::Capture.perf_capture_gap(7.days.ago.utc, 5.days.ago.utc)
 
-          expected_targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload, :exclude_storages => true)
-          expected = expected_targets.flat_map { |t| [[t, "historical"]] * 2 } # Vm, Host, Host, Vm, Host
+            expect(MiqQueue.count).to eq(10)
 
-          expect(queue_intervals).to match_array(expected)
+            targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload, :exclude_storages => true)
+            expected = targets.flat_map { |t| [[t, "historical"]] * 2 } # Vm, Host, Host, Vm, Host
+
+            expect(queue_intervals).to match_array(expected)
+            expect(queue_timings).to eq(queue_timings_for_targets(targets, 7, 5, true))
+          end
         end
       end
     end

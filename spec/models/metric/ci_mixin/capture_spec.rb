@@ -1,4 +1,6 @@
 describe Metric::CiMixin::Capture do
+  include Spec::Support::MetricHelper
+
   before do
     MiqRegion.seed
 
@@ -448,12 +450,14 @@ describe Metric::CiMixin::Capture do
         end
 
         it "should queue up realtime capture for vm" do
+          expect(queue_timings).to eq("realtime" => { @vm => [[Time.now.utc.beginning_of_day]] })
+        end
+
+        it "should be high priority" do
           expect(MiqQueue.count).to eq(1)
 
           msg = MiqQueue.first
           expect(msg.priority).to eq(MiqQueue::HIGH_PRIORITY)
-          expect(msg.instance_id).to eq(@vm.id)
-          expect(msg.class_name).to eq("ManageIQ::Providers::Vmware::InfraManager::Vm")
         end
 
         context "with an existing queue item at a lower priority" do
@@ -467,8 +471,6 @@ describe Metric::CiMixin::Capture do
 
             msg = MiqQueue.first
             expect(msg.priority).to eq(MiqQueue::HIGH_PRIORITY)
-            expect(msg.instance_id).to eq(@vm.id)
-            expect(msg.class_name).to eq("ManageIQ::Providers::Vmware::InfraManager::Vm")
           end
         end
 
@@ -483,8 +485,6 @@ describe Metric::CiMixin::Capture do
 
             msg = MiqQueue.first
             expect(msg.priority).to eq(MiqQueue::MAX_PRIORITY)
-            expect(msg.instance_id).to eq(@vm.id)
-            expect(msg.class_name).to eq("ManageIQ::Providers::Vmware::InfraManager::Vm")
           end
         end
       end

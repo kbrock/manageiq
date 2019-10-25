@@ -19,6 +19,42 @@ module Spec
           [Object.const_get(q.class_name).find(q.instance_id), interval_name]
         end
       end
+
+      # for a given set of targets, determine the timings we think we should generate
+      #
+      def queue_timings_for_targets(targets, days_ago_start = 7, days_ago_end = -1, gap = false)
+        targets.each_with_object({}) do |t, messages|
+          if t.kind_of?(Storage)
+            messages["hourly"] ||= {}
+            messages["hourly"][t] = [[4.hours.ago.utc.beginning_of_day]]
+          else
+            unless gap
+              messages["realtime"] ||= {}
+              messages["realtime"][t] = [[4.hours.ago.utc.beginning_of_day]]
+            end
+            messages["historical"] ||= {}
+            messages["historical"][t] = (days_ago_end...days_ago_start).map { |n| [(n+1).days.ago.utc, n.days.ago.utc].map { |i| gap ? i : i.beginning_of_day} }.sort
+          end
+        end
+      end
+
+      # method_name => {target => [timing1, timing2] }
+      # for each capture type, what objects are submitted and what are their time frames
+      # @return [Hash{String => Hash{Object => Array<Array>}} ]
+      def queue_timings(items = MiqQueue.where(:method_name => %w[perf_capture_hourly perf_capture_realtime perf_capture_historical]))
+        messages = {}
+        items.each do |q|
+          obj = q.instance_id ? Object.const_get(q.class_name).find(q.instance_id) : q.class_name.constantize
+
+          interval_name = q.method_name.sub("perf_capture_", "")
+
+          messages[interval_name] ||= {}
+          (messages[interval_name][obj] ||= []) << q.args
+        end
+        messages["historical"]&.transform_values!(&:sort!)
+
+        messages
+      end
     end
   end
 end
