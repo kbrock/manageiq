@@ -33,7 +33,7 @@ module Spec
               messages["realtime"][t] = [[4.hours.ago.utc.beginning_of_day]]
             end
             messages["historical"] ||= {}
-            messages["historical"][t] = (days_ago_end...days_ago_start).map { |n| [(n+1).days.ago.utc, n.days.ago.utc].map { |i| gap ? i : i.beginning_of_day} }.sort
+             messages["historical"][t] = [[days_ago_start.days.ago.utc, days_ago_end.days.ago.utc].map { |i| gap ? i : i.beginning_of_day} ]
           end
         end
       end
@@ -51,9 +51,21 @@ module Spec
           messages[interval_name] ||= {}
           (messages[interval_name][obj] ||= []) << q.args
         end
-        messages["historical"]&.transform_values!(&:sort!)
+        messages["historical"]&.transform_values! { |v| combine_consecutive(v) }
 
         messages
+      end
+
+      def combine_consecutive(array)
+        x = array.sort!.shift
+        array.each_with_object([]) do |i, ac|
+          if i.first == x.last
+            x[1] = i.last
+          else
+            ac << x
+            x = i
+          end
+        end << x
       end
     end
   end
