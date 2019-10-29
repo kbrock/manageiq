@@ -1,25 +1,6 @@
 module Spec
   module Support
     module MetricHelper
-      def queue_items_for_targets(targets)
-        targets.flat_map do |t|
-          # Storage is hourly only
-          # Non-storage historical is expecting 7 days back, plus partial day = 8
-          t.kind_of?(Storage) ? [[t, "hourly"]] : [[t, "realtime"]] + [[t, "historical"]] * 8
-        end
-        selected = queue_intervals(
-          MiqQueue.where(:method_name => %w[perf_capture_hourly perf_capture_realtime perf_capture_historical])
-        )
-      end
-
-      # @return [Array<Array<Object, String>>] List of object and interval names in miq queue
-      def queue_intervals(items = MiqQueue.where(:method_name => %w[perf_capture_hourly perf_capture_realtime perf_capture_historical]))
-        items.map do |q|
-          interval_name = q.method_name.sub("perf_capture_", "")
-          [Object.const_get(q.class_name).find(q.instance_id), interval_name]
-        end
-      end
-
       # for a given set of targets, determine the timings we think we should generate
       #
       def queue_timings_for_targets(targets, days_ago_start = 7, days_ago_end = -1, gap = false)
@@ -66,6 +47,10 @@ module Spec
             x = i
           end
         end << x
+      end
+
+      def date_range(days_ago_start = 7.days.ago.utc, days_ago_end = 1.day.from_now.utc, gap = false)
+        [[days_ago_start, days_ago_end].map { |i| gap ? i : i.beginning_of_day }]
       end
     end
   end

@@ -35,26 +35,20 @@ describe Metric::Capture do
 
   describe ".perf_capture_timer" do
     context "with enabled and disabled vmware targets", :with_enabled_disabled_vmware do
-      let(:expected_queue_items) do
-        {
-          %w[ManageIQ::Providers::Vmware::InfraManager::Host perf_capture_realtime]   => 3,
-          %w[ManageIQ::Providers::Vmware::InfraManager::Host perf_capture_historical] => 24,
-          %w[Storage perf_capture_hourly]                                             => 1,
-          %w[ManageIQ::Providers::Vmware::InfraManager::Vm perf_capture_realtime]     => 2,
-          %w[ManageIQ::Providers::Vmware::InfraManager::Vm perf_capture_historical]   => 16,
-          %w[MiqTask destroy_older_by_condition]                                      => 1
-        }
-      end
+      let(:storage_targets) { @storages.select(&:perf_capture_enabled?) }
+      let(:targets) { Metric::Targets.capture_ems_targets(@ems_vmware.reload, :exclude_storages => true) }
 
       it "should queue up enabled targets" do
         stub_settings_merge(:performance => {:history => {:initial_capture_days => 7}})
-        Metric::Capture.perf_capture_timer(@ems_vmware.id)
 
         Timecop.freeze do
-          expect(MiqQueue.group(:class_name, :method_name).count).to eq(expected_queue_items)
-          targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload)
-          expect(queue_intervals).to match_array(queue_items_for_targets(targets))
-          expect(queue_timings).to eq(queue_timings_for_targets(targets))
+          Metric::Capture.perf_capture_timer(@ems_vmware.id)
+          expected_queue_items = {
+            "realtime"   => targets.each_with_object({}) { |o, h| h[o] = [[4.hours.ago.utc.beginning_of_day]] },
+            "historical" => targets.each_with_object({}) { |o, h| h[o] = date_range },
+            "hourly"     => storage_targets.each_with_object({}) { |o, h| h[o] = [[4.hours.ago.utc.beginning_of_day]] },
+          }
+          expect(queue_timings).to eq(expected_queue_items)
         end
       end
 
@@ -83,22 +77,19 @@ describe Metric::Capture do
         MiqQueue.delete_all
       end
 
-      context "executing perf_capture_timer" do
-        before do
-          stub_settings(:performance => {:history => {:initial_capture_days => 7}})
-          Metric::Capture.perf_capture_timer(@ems_openstack.id)
-        end
+      let(:targets) { @vms_in_az + @vms_not_in_az }
 
-        it "should queue up enabled targets" do
+      it "should queue up enabled targets" do
+        stub_settings(:performance => {:history => {:initial_capture_days => 7}})
+
+        Timecop.freeze do
+          Metric::Capture.perf_capture_timer(@ems_openstack.id)
+
           expected_queue_items = {
-            %w[ManageIQ::Providers::Openstack::CloudManager::Vm perf_capture_realtime]   => 5,
-            %w[ManageIQ::Providers::Openstack::CloudManager::Vm perf_capture_historical] => 40,
-            %w[MiqTask destroy_older_by_condition]                                       => 1,
+            "realtime"   => targets.each_with_object({}) { |o, h| h[o] = [[4.hours.ago.utc.beginning_of_day]] },
+            "historical" => targets.each_with_object({}) { |o, h| h[o] = date_range },
           }
-          expect(MiqQueue.group(:class_name, :method_name).count).to eq(expected_queue_items)
-          targets = Metric::Targets.capture_ems_targets(@ems_openstack.reload)
-          expect(queue_intervals).to match_array(queue_items_for_targets(targets))
-          expect(queue_timings).to eq(queue_timings_for_targets(targets))
+          expect(queue_timings).to eq(expected_queue_items)
         end
       end
     end
@@ -151,7 +142,7 @@ describe Metric::Capture do
     context "with enabled and disabled targets" do
       before do
         @ems_vmware = FactoryBot.create(:ems_vmware, :zone => @zone)
-        storages = FactoryBot.create_list(:storage_target_vmware, 2)
+        @storages = FactoryBot.create_list(:storage_target_vmware, 2)
         @vmware_clusters = FactoryBot.create_list(:cluster_target, 2)
         @ems_vmware.ems_clusters = @vmware_clusters
 
@@ -160,7 +151,7 @@ describe Metric::Capture do
           @ems_vmware.hosts << host
 
           @vmware_clusters[n / 2].hosts << host if n < 4
-          host.storages << storages[n / 3]
+          host.storages << @storages[n / 3]
         end
 
         MiqQueue.delete_all
@@ -171,13 +162,14 @@ describe Metric::Capture do
           Timecop.freeze do
             Metric::Capture.perf_capture_gap(7.days.ago.utc, 5.days.ago.utc)
 
-            expect(MiqQueue.count).to eq(10)
-
             targets = Metric::Targets.capture_ems_targets(@ems_vmware.reload, :exclude_storages => true)
             expected = targets.flat_map { |t| [[t, "historical"]] * 2 } # Vm, Host, Host, Vm, Host
 
-            expect(queue_intervals).to match_array(expected)
-            expect(queue_timings).to eq(queue_timings_for_targets(targets, 7, 5, true))
+            expected_queue_items = {
+              "historical" => targets.each_with_object({}) { |o, h| h[o] = date_range(7.days.ago.utc, 5.days.ago.utc, true) },
+            }
+ 
+            expect(queue_timings).to eq(expected_queue_items)
           end
         end
       end
