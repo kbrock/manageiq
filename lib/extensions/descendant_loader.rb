@@ -182,6 +182,8 @@ class DescendantLoader
       cache_path.open('w') do |f|
         YAML.dump(cache, f)
       end
+    rescue => e
+      puts "save_cache! failed: #{e.message}"
     end
 
     def classes_in(filename)

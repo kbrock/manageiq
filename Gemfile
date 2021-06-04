@@ -14,7 +14,9 @@ gem "manageiq-gems-pending", ">0", :require => 'manageiq-gems-pending', :git => 
 # when using this Gemfile inside a providers Gemfile, the dependency for the provider is already declared
 def manageiq_plugin(plugin_name)
   unless dependencies.detect { |d| d.name == plugin_name }
-    gem plugin_name, :git => "https://github.com/ManageIQ/#{plugin_name}", :branch => "master"
+    remote = plugin_name =~ /providers/ ? "kbrock"        : "ManageIQ"
+    branch = plugin_name =~ /providers/ ? "properties_files" : "master"
+    gem plugin_name, :git => "https://github.com/#{remote}/#{plugin_name}", :branch => branch
   end
 end
 
