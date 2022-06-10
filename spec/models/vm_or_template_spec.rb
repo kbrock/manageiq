@@ -1223,21 +1223,27 @@ RSpec.describe VmOrTemplate do
   describe ".disconnected?" do
     let(:vm) { FactoryBot.create(:vm_vmware, :connection_state => "connected") }
     let(:vm2) { FactoryBot.create(:vm_vmware, :connection_state => "disconnected") }
-    let(:vm3) { FactoryBot.create(:vm_vmware, :connection_state => nil) }
+    let(:vm3) {  }
 
-    it "detects nil" do
-      expect(vm3).not_to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_falsey
+    context "when no status" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => nil) }
+
+      it { expect(subject.disconnected?).to be_falsey }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, false
     end
 
-    it "detects connected" do
-      expect(vm).not_to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_falsey
+    context "when connected" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => "connected") }
+
+      it { expect(subject.disconnected?).to be_falsey }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, false
     end
 
-    it "detects disconnected" do
-      expect(vm2).to be_disconnected
-      expect(virtual_column_sql_value(VmOrTemplate, "disconnected")).to be_truthy
+    context "when disconnected" do
+      subject { FactoryBot.create(:vm_vmware, :connection_state => "disconnected") }
+
+      it { expect(subject.disconnected?).to be_truthy }
+      it_behaves_like "sql friendly virtual_attribute", :disconnected, true
     end
   end
 
@@ -1585,6 +1591,14 @@ RSpec.describe VmOrTemplate do
       let(:storage) { nil }
 
       include_examples "normalized_state return value", "archived"
+    end
+
+    context 'with no ems and no storage attached' do
+      let(:ems) { nil }
+      let(:storage) { nil }
+      subject { vm }
+
+      it_behaves_like "sql friendly virtual_attribute", :normalized_state, "archived"
     end
 
     context 'no ems attached' do
