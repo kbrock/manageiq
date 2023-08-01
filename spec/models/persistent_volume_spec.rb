@@ -63,6 +63,6 @@ RSpec.describe PersistentVolume do
     end
 
     # delegating through a polymorphic forces us to ruby only
-    it_behaves_like "ruby only virtual_attribute", :parent_name, 'ems_name'
+    it_behaves_like "sql friendly virtual_attribute", :parent_name, 'ems_name'
   end
 end
