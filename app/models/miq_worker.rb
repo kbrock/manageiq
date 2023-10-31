@@ -550,12 +550,21 @@ class MiqWorker < ApplicationRecord
 
   def self.minimal_class_name
     abbreviated_class_name
-      .sub(/Miq/, "")
-      .sub(/Worker/, "")
+      .sub("Miq", "")
+      .sub("Worker", "")
   end
 
   def minimal_class_name
     self.class.minimal_class_name
+  end
+
+  def self.ultra_minimal_class_name
+    minimal_class_name
+        .gsub("Manager", "")
+  end
+
+  def ultra_minimal_class_name
+    self.class.ultra_minimal_class_name
   end
 
   def database_application_name
