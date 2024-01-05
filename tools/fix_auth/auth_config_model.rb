@@ -15,7 +15,9 @@ module FixAuth
 
       def display_column(r, column, options)
         puts "    #{column}:"
-        traverse_column([], YAML.load(r.send(column)), options)
+
+        hash = r.send(column).kind_of?(Hash) ? r.send(column) : YAML.load(r.send(column))
+        traverse_column([], hash, options)
       end
 
       def password_field?(key)

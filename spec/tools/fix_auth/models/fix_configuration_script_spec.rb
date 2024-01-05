@@ -37,11 +37,17 @@ RSpec.describe FixAuth::FixConfigurationScript do
   end
 
   context "with v2 encrypted passwords in credentials" do
-    let(:credentials) { {"foo" => enc_old} }
+    let(:credentials) { {"foo" => enc_old, "foo2" => enc_old, "bar" => "other"} }
 
     it "re-encrypts the passwords" do
       FixAuth::FixConfigurationScript.run(options)
       expect(configuration_script.reload.credentials["foo"]).to be_encrypted(pass)
+      expect(configuration_script.reload.credentials["foo2"]).to be_encrypted(pass)
+    end
+
+    it "does nothing" do
+      FixAuth::FixConfigurationScript.run(options)
+      expect(configuration_script.reload.credentials["bar"]).to eq("other")
     end
   end
 end
