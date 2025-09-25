@@ -19,5 +19,26 @@ RSpec.describe "ar_references" do
     it "supports table array" do
       expect(Vm.includes_to_references(%w[hosts operating_systems])).to eq(%w[hosts operating_systems])
     end
+
+    it "skips tags" do
+      expect(Vm.includes_to_references(:taggings => {})).to eq([])
+    end
+
+    it "skips virtual has many" do
+      expect(Vm.includes_to_references(:processes => {})).to eq([])
+    end
+
+    it "skips virtual attributes" do
+      expect(Vm.includes_to_references(:archived => {}, :platform => {})).to eq([])
+    end
+
+    it "skips polymorphic references" do
+      expect(MetricRollup.includes_to_references(:resource=>{})).to eq([])
+      expect(MiqGroup.includes_to_references(:tenant => :source)).to eq(%w[tenants])
+    end
+
+    it "skips uses with a polymorphic reference" do
+      expect(MetricRollup.includes_to_references(:v_derived_storage_used => {})).to eq([])
+    end
   end
 end
