@@ -158,6 +158,7 @@ class ActsAsArModel
   end
   private_class_method :search
 
+  # Note: ignores references
   def self.to_legacy_options(options)
     {
       :conditions => options[:where],

@@ -429,6 +429,8 @@ module Rbac
       end
     end
 
+    # For ActsAsArModel - scope should be a a QueryRelation
+    # For ActsAsArScope - scope should be a standard AR scope (with where and others tacked in)
     def include_references(scope, klass, includes, references, exp_includes)
       # TODO: do we want to klass.prune_references(exp_includes)? (see same comment for inline_view? section)
       scope.eager_load(references || {}).eager_load(exp_includes || {}).preload(includes)
